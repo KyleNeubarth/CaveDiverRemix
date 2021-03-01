@@ -3,13 +3,14 @@ version 29
 __lua__
 --globals
 gravity = .2
-friction = .2
-game_over = false
-cave_height = 500
-tunnel_height = cave_height/2
 --end globals
 
 --core funcs
+function _init()
+    game_over = false
+    make_player()
+    make_cave()
+end
 
 function _update() 
     if (not game_over) then
@@ -34,18 +35,12 @@ function _draw()
         print("score:"..player.score,2,2,7)
     end
 end
-function _init()
-    game_over = false
-    make_player()
-    make_cave()
-end
 --end core funcs
 
---init functions
 function make_player()
     player = {}
     player.x = 24 --pos
-    player.y = cave_height/2
+    player.y = 60
     player.dy = 0 --fall speed
     player.rise = 1 --sprites
     player.fall = 2
@@ -53,12 +48,6 @@ function make_player()
     player.speed = 2
     player.score = 0
 end
-function make_cave()
-    cave = {{["top"]=200,["btm"]=200}}
-    top = 200
-    btm = 200
-end
---end init functions
 
 function draw_player()
     if (game_over) then
@@ -83,6 +72,12 @@ function move_player()
     player.score += player.speed
 end
 
+function make_cave()
+    cave = {{["top"]=5,["btm"]=119}}
+    top = 45
+    btm = 85
+end
+
 function update_cave() 
     if (#cave>player.speed) then
         for i=1,player.speed do
@@ -95,7 +90,7 @@ function update_cave()
         local up = flr(rnd(7)-3)
         local dwn = flr(rnd(7)-3)
         col.top=mid(3,cave[#cave].top+up,top)
-        col.btm=mid(btm,cave[#cave].btm+dwn,cave_height)
+        col.btm=mid(btm,cave[#cave].btm+dwn,124)
         add(cave,col)
     end
 end
@@ -104,19 +99,18 @@ function draw_cave()
     top_color=5
     btm_color=4
     for i=1,#cave do
-        line(i-1,64-cave_height/2,i-1,64-cave_height/2+cave[i].top,top_color)
-        line(i-1,64+cave_height/2,i-1,64+cave_height/2-cave[i].btm,btm_color)
+        line(i-1,0,i-1,cave[i].top,top_color)
+        line(i-1,127,i-1,cave[i].btm,btm_color)
     end
 end
 
 function check_hit()
-    return
-    -- for i=player.x,player.x+7 do
-    --     if (cave[i+1].top>player.y or cave[i+1].btm<player.y+7) then
-    --         game_over = true
-    --         sfx(1)
-    --     end
-    -- end
+    for i=player.x,player.x+7 do
+        if (cave[i+1].top>player.y or cave[i+1].btm<player.y+7) then
+            game_over = true
+            sfx(1)
+        end
+    end
 end
 
 __gfx__
