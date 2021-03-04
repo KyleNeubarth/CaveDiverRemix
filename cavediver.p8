@@ -2,14 +2,24 @@ pico-8 cartridge // http://www.pico-8.com
 version 29
 __lua__
 --globals
-gravity = .2
+gravity = .15
+fricton = .95
+cave_height=500
+min_tunnel_size = 50
+wavy_period = 1.5
 --end globals
+tunnel_center = 0
+limit = cave_height/2-min_tunnel_size/2
+toplimit = cave_height/2-min_tunnel_size/2 + tunnel_center
+bottomlimit = cave_height/2-min_tunnel_size/2 - tunnel_center
+
+player={}
+cave = {{["top"]=toplimit-min_tunnel_size/2,["btm"]=bottomlimit-min_tunnel_size/2,["hastentacle"]=false}}
 
 --core funcs
 function _init()
     game_over = false
     make_player()
-    make_cave()
 end
 
 function _update() 
@@ -32,50 +42,51 @@ function _draw()
         print("your score:"..player.score,34,54,7)
         print("press X to play again!",18,72,6)
     else
-        print("score:"..player.score,2,2,7)
+        print("score:"..player.y,2,2,7)
     end
 end
 --end core funcs
 
 function make_player()
     player = {}
+    cam = {}
     player.x = 24 --pos
-    player.y = 60
+    player.y = 0
     player.dy = 0 --fall speed
     player.rise = 1 --sprites
     player.fall = 2
     player.dead = 3
     player.speed = 2
     player.score = 0
+    cam.x = player.x
+    cam.y = player.y
 end
 
 function draw_player()
     if (game_over) then
-        spr(player.dead,player.x,player.y)
+        spr(player.dead,player.x,64-cam.y+player.y)
     elseif (player.dy < 0) then
-        spr(player.rise,player.x,player.y)
+        spr(player.rise,player.x,64-cam.y+player.y)
     else
-        spr(player.fall,player.x,player.y)
+        spr(player.fall,player.x,64-cam.y+player.y)
     end
 end
 
 function move_player()
-    player.dy+=gravity
-
-    if (btnp(2)) then
-        player.dy -= 5
-        sfx(0)
+    --player.dy+=gravity
+    player.dy*=fricton
+    if (btn(2)) then
+        player.dy -= .5
+        --sfx(0)
+    elseif (btn(3)) then
+        player.dy += .5
     end
 
     player.y += player.dy
 
+    cam.y += (player.y-cam.y)/4
+    
     player.score += player.speed
-end
-
-function make_cave()
-    cave = {{["top"]=5,["btm"]=119}}
-    top = 45
-    btm = 85
 end
 
 function update_cave() 
@@ -87,30 +98,79 @@ function update_cave()
 
     while (#cave<128) do
         local col = {}
-        local up = flr(rnd(7)-3)
-        local dwn = flr(rnd(7)-3)
-        col.top=mid(3,cave[#cave].top+up,top)
-        col.btm=mid(btm,cave[#cave].btm+dwn,124)
+        local mov = cos((player.score-100)/500.0)*(1.5*cave_height/2)/500
+        local up = (rnd(6)-3) + mov
+        local dwn = (rnd(6)-3) - mov
+        toplimit = cave_height/2-min_tunnel_size/2 + tunnel_center
+        bottomlimit = cave_height/2-min_tunnel_size/2 - tunnel_center
+        col.top=mid(3,cave[#cave].top+up,cave_height)
+        col.btm=mid(3,cave[#cave].btm+dwn,cave_height)
+
+        local height_diff = cave_height-col.top-col.btm
+        if (height_diff > 100) then
+            if (rnd(1) > .5) then
+                col.top+=1
+            else
+                col.btm+=1
+            end
+        elseif (height_diff <50) then
+            if (rnd(1) > .5) then
+                col.top-=1
+            else
+                col.btm-=1
+            end
+        end
+
+        col.hastentacle = false
+        if (rnd()>.01) then
+            col.tentacle = {}
+            col.hastentacle = true
+            if (rnd()>.5) then
+                col.tentacle.facingup = true
+                col.tentacle.bulb = col.btm - height_diff/4 - rnd(height_diff/2)
+            else
+                col.tentacle.facingup = false            
+                col.tentacle.bulb = col.top + height_diff/4 + rnd(height_diff/2)
+            end
+        end
+
         add(cave,col)
     end
 end
 
 function draw_cave() 
-    top_color=5
-    btm_color=4
+    top_color=8
+    btm_color=14
+    wavy_coeff = 0
     for i=1,#cave do
-        line(i-1,0,i-1,cave[i].top,top_color)
-        line(i-1,127,i-1,cave[i].btm,btm_color)
+        wavy_coeff = sin((player.score*wavy_period+i)/16)
+        line(i-1,64-cam.y-cave_height/2,i-1,64-cam.y-cave_height/2+cave[mid(1,i+flr(wavy_coeff+.5),#cave)].top,top_color)
+        line(i-1,64-cam.y+cave_height/2,i-1,64-cam.y+cave_height/2-cave[mid(1,i+flr(wavy_coeff+.5),#cave)].btm,btm_color)
+        --debug sin waves
+        --pset(i-1,10+wavy_coeff*5,6)
+        --pset(i-1,110+flr(wavy_coeff+.5)*5,6)
+        if (cave[i-1].hastentacle) then
+            if (cave[i-1].tentacle.facingup) then
+                rect(i,cave[i-1].tentacle.bulb,i-2,cave[i-1].btm,10)
+            else
+                rect(i,cave[i-1].tentacle.bulb,i-2,cave[i-1].top,10)
+            end
+        end
     end
 end
 
 function check_hit()
     for i=player.x,player.x+7 do
-        if (cave[i+1].top>player.y or cave[i+1].btm<player.y+7) then
+        if (-cave_height/2+cave[i+1].top>player.y or cave_height/2-cave[i+1].btm<player.y+7) then
             game_over = true
             sfx(1)
         end
     end
+end
+
+--utility funcs
+function smoothstep(x)
+    return x*x*(3-2*x)
 end
 
 __gfx__
